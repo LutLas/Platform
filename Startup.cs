@@ -21,6 +21,10 @@ namespace Platform
             /*services.Configure<MessageOptions>(options => {
                 options.CityName = "Albany";
             });*/
+            services.Configure<RouteOptions>(opts => {
+                opts.ConstraintMap.Add("countryName",
+                typeof(CountryRouteConstraint));
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -35,7 +39,22 @@ namespace Platform
             //app.UseMiddleware<Capital>();
 
             app.UseRouting();
-            app.UseEndpoints(endpoints => {
+
+            app.Use(async (context, next) => {
+                Endpoint end = context.GetEndpoint();
+                if (end != null)
+                {
+                    await context.Response
+                    .WriteAsync($"{end.DisplayName} Selected \n");
+                }
+                else
+                {
+                    await context.Response.WriteAsync("No Endpoint Selected \n");
+                }
+                await next();
+            });
+
+            app.UseEndpoints(endpoints => {/*
 
                 endpoints.MapGet("files/{filename}.{ext}", async context => {
                     await context.Response.WriteAsync("Request Was Routed\n");
@@ -45,11 +64,22 @@ namespace Platform
                         .WriteAsync($"{kvp.Key}: {kvp.Value}\n");
                     }
                 });
-                endpoints.MapGet("capital/{country}", Capital.Endpoint);
+                endpoints.MapGet("capital/{country:countryName}", Capital.Endpoint);
                 endpoints.MapGet("size/{city}", Population.Endpoint).WithMetadata(new RouteNameMetadata("population"));
                 endpoints.MapFallback(async context => {
                     await context.Response.WriteAsync("Routed to fallback endpoint");
-                });
+                });*/
+                endpoints.Map("{number:int}", async context => {
+                    await context.Response.WriteAsync("Routed to the int endpoint");
+                })
+                .WithDisplayName("Int Endpoint")
+                .Add(b => ((RouteEndpointBuilder)b).Order = 1);
+                endpoints.Map("{number:double}", async context => {
+                    await context.Response
+                    .WriteAsync("Routed to the double endpoint");
+                })
+                .WithDisplayName("Double Endpoint")
+                .Add(b => ((RouteEndpointBuilder)b).Order = 2);
             });
 
             app.Run(async (context) => {
