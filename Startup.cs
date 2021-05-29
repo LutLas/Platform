@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;/*
 using Microsoft.Extensions.Options;*/
+using Platform.Services;
 
 namespace Platform
 {
@@ -18,17 +19,55 @@ namespace Platform
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+            /*services.AddSingleton<IResponseFormatter, TextResponseFormatter>();*/
+            services.AddSingleton<IResponseFormatter, HtmlResponseFormatter>();
+        }
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IResponseFormatter formatter)
+        {
+            app.UseDeveloperExceptionPage();
+            app.UseRouting();
+            app.UseMiddleware<WeatherMiddleware>();
+            /*IResponseFormatter formatter = new TextResponseFormatter();*/
+            app.Use(async (context, next) => {
+                if (context.Request.Path == "/middleware/function")
+                {
+                    /*await formatter.Format(context,
+                    "Middleware Function: It is snowing in Chicago");*/
+                    await formatter.Format(context,
+                        "Middleware Function: It is snowing in Chicago");
+                }
+                else
+                {
+                    await next();
+                }
+            });
+            app.UseEndpoints(endpoints => {
+                endpoints.MapGet("/endpoint/class", WeatherEndpoint.Endpoint);
+                endpoints.MapGet("/endpoint/function", async context => {
+                    /*await context.Response
+                    .WriteAsync("Endpoint Function: It is sunny in LA");*/
+                    await formatter.Format(context,
+                        "Endpoint Function: It is sunny in LA");
+                });
+            });
+        }
+    }
+}
+
+
+
+
             /*services.Configure<MessageOptions>(options => {
                 options.CityName = "Albany";
             });*/
-            services.Configure<RouteOptions>(opts => {
+            /*services.Configure<RouteOptions>(opts => {
                 opts.ConstraintMap.Add("countryName",
                 typeof(CountryRouteConstraint));
             });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env/*, IOptions<MessageOptions> msgOptions*/)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env*//*, IOptions<MessageOptions> msgOptions*//*)
         {
             if (env.IsDevelopment())
             {
@@ -54,7 +93,7 @@ namespace Platform
                 await next();
             });
 
-            app.UseEndpoints(endpoints => {/*
+            app.UseEndpoints(endpoints => {*//*
 
                 endpoints.MapGet("files/{filename}.{ext}", async context => {
                     await context.Response.WriteAsync("Request Was Routed\n");
@@ -68,7 +107,7 @@ namespace Platform
                 endpoints.MapGet("size/{city}", Population.Endpoint).WithMetadata(new RouteNameMetadata("population"));
                 endpoints.MapFallback(async context => {
                     await context.Response.WriteAsync("Routed to fallback endpoint");
-                });*/
+                });*//*
                 endpoints.Map("{number:int}", async context => {
                     await context.Response.WriteAsync("Routed to the int endpoint");
                 })
@@ -84,7 +123,7 @@ namespace Platform
 
             app.Run(async (context) => {
                 await context.Response.WriteAsync("Terminal Middleware Reached");
-            });
+            });*/
 
             /*app.UseMiddleware<LocationMiddleware>();*/
 
@@ -143,6 +182,7 @@ namespace Platform
             });
 
             app.UseMiddleware<QueryStringMiddleWare>();*/
-        }
+        /*
     }
 }
+*/
