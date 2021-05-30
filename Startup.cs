@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,16 @@ namespace Platform
                 it.IdleTimeout = TimeSpan.FromMinutes(30);
                 it.Cookie.IsEssential = true;
             });
+
+            services.AddHsts(it => {
+                it.MaxAge = TimeSpan.FromDays(1);
+                it.IncludeSubDomains = true;
+            });
+
+            services.Configure<HostFilteringOptions>(opts => {
+                opts.AllowedHosts.Clear();
+                opts.AllowedHosts.Add("*.example.com");
+            });
         }
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
@@ -30,11 +41,36 @@ namespace Platform
             {
                 app.UseDeveloperExceptionPage();
             }
+            else
+            if (env.IsProduction()) {
+                app.UseHsts();
+            }
+            app.UseExceptionHandler("/error.html");
+            app.UseStaticFiles();
             app.UseHttpsRedirection();
-            app.UseCookiePolicy();
+            app.UseStatusCodePages("text/html", Responses.DefaultResponse);
+            app.UseCookiePolicy();           
             app.UseMiddleware<ConsentMiddleware>();
             app.UseSession();
-            app.UseRouting();
+
+            app.Use(async (context, next) => {
+                if (context.Request.Path == "/error")
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    await Task.CompletedTask;
+                }
+                else
+                {
+                    await next();
+                }
+            });
+
+            app.Run(context =>
+            {
+                throw new Exception("Something has gone wrong");
+            });
+
+            /*app.UseRouting();
 
             app.Use(async (context, next) => {
                 await context.Response
@@ -63,7 +99,7 @@ namespace Platform
                 endpoints.MapFallback(async context => {
                     await context.Response.WriteAsync("Hello World!");
                 });
-            });
+            });*/
         }
     }
 }
