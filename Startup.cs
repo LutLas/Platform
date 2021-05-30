@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;/*
 using Microsoft.Extensions.Options;*/
@@ -15,39 +16,40 @@ namespace Platform
 {
     public class Startup
     {
+        public Startup(IConfiguration config)
+        {
+            Configuration = config;
+        }
+        private IConfiguration Configuration;
+
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            /*services.AddSingleton<IResponseFormatter, TextResponseFormatter>();*/
-            services.AddSingleton<IResponseFormatter, HtmlResponseFormatter>();
+            services.AddSingleton(typeof(ICollection<>), typeof(List<>));
         }
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IResponseFormatter formatter)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             app.UseDeveloperExceptionPage();
             app.UseRouting();
-            app.UseMiddleware<WeatherMiddleware>();
-            /*IResponseFormatter formatter = new TextResponseFormatter();*/
-            app.Use(async (context, next) => {
-                if (context.Request.Path == "/middleware/function")
-                {
-                    /*await formatter.Format(context,
-                    "Middleware Function: It is snowing in Chicago");*/
-                    await formatter.Format(context,
-                        "Middleware Function: It is snowing in Chicago");
-                }
-                else
-                {
-                    await next();
-                }
-            });
             app.UseEndpoints(endpoints => {
-                endpoints.MapGet("/endpoint/class", WeatherEndpoint.Endpoint);
-                endpoints.MapGet("/endpoint/function", async context => {
-                    /*await context.Response
-                    .WriteAsync("Endpoint Function: It is sunny in LA");*/
-                    await formatter.Format(context,
-                        "Endpoint Function: It is sunny in LA");
+                endpoints.MapGet("/string", async context => {
+                    ICollection<string> collection
+                    = context.RequestServices.GetService<ICollection<string>>();
+                    collection.Add($"Request: { DateTime.Now.ToLongTimeString() }");
+                    foreach (string str in collection)
+                    {
+                        await context.Response.WriteAsync($"String: {str}\n");
+                    }
+                });
+                endpoints.MapGet("/int", async context => {
+                    ICollection<int> collection
+                    = context.RequestServices.GetService<ICollection<int>>();
+                    collection.Add(collection.Count() + 1);
+                    foreach (int val in collection)
+                    {
+                        await context.Response.WriteAsync($"Int: {val}\n");
+                    }
                 });
             });
         }
