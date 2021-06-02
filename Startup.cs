@@ -2,8 +2,12 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Platform.Models;
+using Platform.Services;
 using System;
 using System.Threading.Tasks;
 
@@ -11,31 +15,30 @@ namespace Platform
 {
     public class Startup
     {
+        public Startup(IConfiguration config)
+        {
+            Configuration = config;
+        }
+        private IConfiguration Configuration { get; set; }
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            services.Configure<CookiePolicyOptions>(it => {
-                it.CheckConsentNeeded = context => true;
+            services.AddDistributedSqlServerCache(it => {
+                it.ConnectionString = Configuration["ConnectionStrings:CacheConnection"];
+                it.SchemaName = "dbo";
+                it.TableName = "DataCache";
             });
-
-            services.AddDistributedMemoryCache();
-            services.AddSession(it => {
-                it.IdleTimeout = TimeSpan.FromMinutes(30);
-                it.Cookie.IsEssential = true;
+            services.AddResponseCaching();
+            services.AddSingleton<IResponseFormatter, HtmlResponseFormatter>();
+            services.AddDbContext<CalculationContext>(it => {
+                it.UseSqlServer(Configuration["ConnectionStrings:CalcConnection"]);
             });
-
-            services.AddHsts(it => {
-                it.MaxAge = TimeSpan.FromDays(1);
-                it.IncludeSubDomains = true;
-            });
-
-            services.Configure<HostFilteringOptions>(opts => {
-                opts.AllowedHosts.Clear();
-                opts.AllowedHosts.Add("*.example.com");
-            });
+            services.AddTransient<SeedData>();
         }
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        public void Configure(IApplicationBuilder app,
+IHostApplicationLifetime lifetime, IWebHostEnvironment env,
+SeedData seedData)
         {
             if (env.IsDevelopment())
             {
@@ -47,11 +50,7 @@ namespace Platform
             }
             app.UseExceptionHandler("/error.html");
             app.UseStaticFiles();
-            app.UseHttpsRedirection();
             app.UseStatusCodePages("text/html", Responses.DefaultResponse);
-            app.UseCookiePolicy();           
-            app.UseMiddleware<ConsentMiddleware>();
-            app.UseSession();
 
             app.Use(async (context, next) => {
                 if (context.Request.Path == "/error")
@@ -64,42 +63,24 @@ namespace Platform
                     await next();
                 }
             });
-
-            app.Run(context =>
-            {
-                throw new Exception("Something has gone wrong");
-            });
-
-            /*app.UseRouting();
-
-            app.Use(async (context, next) => {
-                await context.Response
-                .WriteAsync($"HTTPS Request: {context.Request.IsHttps} \n");
-                await next();
-            });
-
+            app.UseRouting();
             app.UseEndpoints(endpoints => {
-
-                endpoints.MapGet("/cookie", async context => {
-                    int counter1 = (context.Session.GetInt32("counter1") ?? 0) + 1;
-                    int counter2 = (context.Session.GetInt32("counter2") ?? 0) + 1;
-                    context.Session.SetInt32("counter1", counter1);
-                    context.Session.SetInt32("counter2", counter2);
-                    await context.Session.CommitAsync();
-                    await context.Response
-                    .WriteAsync($"Counter1: {counter1}, Counter2: {counter2}");
-                });
-                endpoints.MapGet("clear", context => {
-                    context.Response.Cookies.Delete("counter1");
-                    context.Response.Cookies.Delete("counter2");
-                    context.Response.Redirect("/");
-                    return Task.CompletedTask;
-                });
-
-                endpoints.MapFallback(async context => {
+                endpoints.MapEndpoint<SumEndpoint>("/sum/{count:int=1000000000}");
+                endpoints.MapGet("/", async context => {
                     await context.Response.WriteAsync("Hello World!");
                 });
-            });*/
+            });
+
+            bool cmdLineInit = (Configuration["INITDB"] ?? "false") == "true";
+            if (env.IsDevelopment() || cmdLineInit)
+            {
+                seedData.SeedDatabase();
+                if (cmdLineInit)
+                {
+                    lifetime.StopApplication();
+                }
+            }
+
         }
     }
 }
